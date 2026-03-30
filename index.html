@@ -128,6 +128,24 @@ textarea::placeholder{color:var(--text3);}
 .tag-auto{border-color:var(--green);color:var(--green);background:rgba(22,163,74,.08);}
 .tag-manual{border-color:var(--yellow);color:var(--yellow);background:rgba(217,119,6,.08);}
 .div{height:1px;background:var(--border);margin:2px 0;}
+
+/* BİLDİRİM GEÇMİŞİ */
+.notif-list{display:flex;flex-direction:column;gap:8px;}
+.notif-item{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;
+  display:flex;flex-direction:column;gap:5px;transition:border-color .15s;}
+.notif-item:hover{border-color:var(--accent);}
+.notif-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.notif-phone{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--accent);}
+.notif-name{font-size:13px;font-weight:600;color:var(--text);}
+.notif-from{font-size:10px;color:var(--text3);}
+.notif-banks{font-size:11px;color:var(--purple);font-weight:600;}
+.notif-note{font-size:11px;color:var(--text2);font-style:italic;}
+.notif-actions{display:flex;gap:6px;margin-top:4px;}
+.notif-call{padding:5px 12px;background:var(--green);color:#fff;border:none;border-radius:6px;
+  font-size:11px;font-weight:700;cursor:pointer;transition:opacity .15s;}
+.notif-call:hover{opacity:.85;}
+.notif-time{font-size:10px;color:var(--text3);white-space:nowrap;}
+.notif-empty{font-size:12px;color:var(--text3);text-align:center;padding:16px 0;}
 </style>
 </head>
 <body>
@@ -199,6 +217,19 @@ textarea::placeholder{color:var(--text3);}
 
   <div class="div"></div>
   <button class="send-btn" id="sendBtn" onclick="sendToTeam()">📤 Ekibe Gönder</button>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-label">🔔 Gelen Bildirimler</span>
+      <span style="font-size:10px;color:var(--text3);cursor:pointer;" onclick="clearNotifs()">Temizle</span>
+    </div>
+    <div class="card-body">
+      <div class="notif-list" id="notifList">
+        <div class="notif-empty">Henüz bildirim yok</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -334,6 +365,49 @@ window.sendToTeam=async()=>{
   btn.disabled=false;btn.innerHTML='📤 Ekibe Gönder';
 };
 
+// Bildirim geçmişi
+let notifHistory = [];
+
+window.clearNotifs = () => {
+  notifHistory = [];
+  document.getElementById('notifList').innerHTML = '<div class="notif-empty">Henüz bildirim yok</div>';
+};
+
+function addToHistory(d) {
+  let banks = []; try { banks = JSON.parse(d.banks||'[]'); } catch(e) {}
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const phone = d.phone || '';
+  
+  const item = document.createElement('div');
+  item.className = 'notif-item';
+  item.innerHTML = `
+    <div class="notif-top">
+      <div>
+        <div class="notif-name">${d.name||'—'}</div>
+        <div class="notif-phone">${phone}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="notif-time">${time}</div>
+        <div class="notif-from">${d.from_name||'Ekip'}</div>
+      </div>
+    </div>
+    ${banks.length ? `<div class="notif-banks">🏦 ${banks.join(' · ')}</div>` : ''}
+    ${d.note ? `<div class="notif-note">${d.note}</div>` : ''}
+    <div class="notif-actions">
+      <button class="notif-call" onclick="window.location.href='tel:${phone}'">📲 Ara</button>
+    </div>
+  `;
+  
+  const list = document.getElementById('notifList');
+  const empty = list.querySelector('.notif-empty');
+  if (empty) empty.remove();
+  list.insertBefore(item, list.firstChild);
+  
+  // Max 20 bildirim tut
+  while (list.children.length > 20) list.removeChild(list.lastChild);
+}
+
 function showIncoming(d){
   incPhone=d.phone||'';
   document.getElementById('incFrom').textContent=(d.from_name||'Ekip')+' yönlendirdi';
@@ -343,6 +417,7 @@ function showIncoming(d){
   document.getElementById('incBanks').textContent=banks.length?'🏦 '+banks.join(' · '):'';
   document.getElementById('incNote').textContent=d.note||'Not yok';
   document.getElementById('incomingOverlay').classList.add('show');
+  addToHistory(d);
   try{
     const ctx=new AudioContext();
     [0,.35,.7].forEach(t=>{
