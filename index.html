@@ -417,6 +417,15 @@ window.sendToTeam=async()=>{
 // Bildirim geçmişi
 let notifHistory = [];
 
+function formatNote(note) {
+  if(!note) return '';
+  // Imgur linklerini tıklanabilir yap
+  return note.replace(/(https?:\/\/i\.imgur\.com\/\S+)/g, 
+    '<a href="$1" target="_blank" style="color:var(--accent)">🖼 Resmi Gör</a>'
+  ).replace(/
+/g, '<br>');
+}
+
 window.clearNotifs = () => {
   notifHistory = [];
   document.getElementById('notifList').innerHTML = '<div class="notif-empty">Henüz bildirim yok</div>';
@@ -442,7 +451,7 @@ function addToHistory(d) {
       </div>
     </div>
     ${banks.length ? `<div class="notif-banks">🏦 ${banks.join(' · ')}</div>` : ''}
-    ${d.note ? `<div class="notif-note">${d.note}</div>` : ''}
+    ${d.note ? `<div class="notif-note">${formatNote(d.note)}</div>` : ''}
     <div class="notif-actions">
       <button class="notif-call" onclick="window.location.href='tel:${phone}'">📲 Ara</button>
     </div>
@@ -536,6 +545,23 @@ window.removeFile = (btn) => {
   item.remove();
 };
 
+// Resmi Imgur'a yükle
+async function uploadToImgur(file) {
+  const base64 = await new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result.split(',')[1]);
+    r.readAsDataURL(file);
+  });
+  const resp = await fetch('https://api.imgur.com/3/image', {
+    method: 'POST',
+    headers: { 'Authorization': 'Client-ID 546c25a59c58ad7' },
+    body: JSON.stringify({ image: base64, type: 'base64' }),
+  });
+  const data = await resp.json();
+  if(data.success) return data.data.link;
+  throw new Error('Imgur hatası');
+}
+
 window.sendMessage = async () => {
   const msg = document.getElementById('msgArea').value.trim();
   const files = attachedFiles.filter(f => f !== null);
@@ -544,14 +570,26 @@ window.sendMessage = async () => {
   if(!userId) { showToast('Kullanıcı gerekli','err'); return; }
 
   const btn = document.getElementById('sendMsgBtn');
-  btn.disabled = true; btn.textContent = '⏳';
+  btn.disabled = true; btn.textContent = '⏳ Yükleniyor...';
 
-  // Dosyaları base64'e çevir
-  const fileData = await Promise.all(files.map(f => new Promise(res => {
-    const reader = new FileReader();
-    reader.onload = e => res({ name: f.name, type: f.type, data: e.target.result });
-    reader.readAsDataURL(f);
-  })));
+  // Resimleri Imgur'a yükle
+  let fileLinks = [];
+  for(const file of files) {
+    try {
+      if(file.type.startsWith('image/')) {
+        showToast('Resim yükleniyor...');
+        const link = await uploadToImgur(file);
+        fileLinks.push('🖼 ' + file.name + ': ' + link);
+      } else {
+        fileLinks.push('📎 ' + file.name + ' (dosya)');
+      }
+    } catch(e) {
+      fileLinks.push('❌ ' + file.name + ' yüklenemedi');
+    }
+  }
+
+  const fullNote = [msg, ...fileLinks].filter(Boolean).join('
+');
 
   const payload = {
     from_name: userName,
@@ -559,9 +597,8 @@ window.sendMessage = async () => {
     phone: currentPhone || '',
     name: document.getElementById('nameInput').value.trim() || '',
     banks: JSON.stringify([]),
-    note: msg + (fileData.length ? ' [' + fileData.map(f=>f.name).join(', ') + ']' : ''),
-    msg_type: 'message',
-    files: JSON.stringify(fileData)
+    note: fullNote,
+    msg_type: 'message'
   };
 
   try {
