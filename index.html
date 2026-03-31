@@ -419,21 +419,31 @@ function removeFile(idx) {
   });
 }
 
-// IMGUR UPLOAD
+// IMGBB UPLOAD (imgur yedeği)
 async function uploadImgur(file) {
   const base64 = await new Promise(function(res) {
     const r = new FileReader();
     r.onload = function(e) { res(e.target.result.split(',')[1]); };
     r.readAsDataURL(file);
   });
-  const resp = await fetch('https://api.imgur.com/3/image', {
+  // imgbb.com - ücretsiz ve stabil
+  const form = new FormData();
+  form.append('image', base64);
+  const resp = await fetch('https://api.imgbb.com/1/upload?key=2e48e99e9b675d7ce9a6b9f8b8e2c4a1', {
     method: 'POST',
-    headers: {'Authorization': 'Client-ID ' + IMGUR_ID, 'Content-Type': 'application/json'},
-    body: JSON.stringify({image: base64, type: 'base64'})
+    body: form
   });
   const data = await resp.json();
-  if(data.success) return data.data.link;
-  throw new Error('Imgur hatası');
+  if(data.success) return data.data.url;
+  // Imgur fallback
+  const resp2 = await fetch('https://api.imgur.com/3/image', {
+    method: 'POST',
+    headers: {'Authorization': 'Client-ID 546c25a59c58ad7', 'Content-Type': 'application/json'},
+    body: JSON.stringify({image: base64, type: 'base64'})
+  });
+  const data2 = await resp2.json();
+  if(data2.success) return data2.data.link;
+  throw new Error('Resim yüklenemedi');
 }
 
 // SEND MESSAGE
